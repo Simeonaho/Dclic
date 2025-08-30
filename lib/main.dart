@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'modeles/redacteur.dart';
 
-
 void main() {
   runApp(const MonApp());
 }
-
 
 class MonApp extends StatelessWidget {
   const MonApp({super.key});
@@ -15,274 +13,215 @@ class MonApp extends StatelessWidget {
     return MaterialApp(
       title: 'Magazine',
       debugShowCheckedModeBanner: false,
-      home:  RedacteurInterface(),
+      home: const PageAccueil(),
     );
   }
 }
 
-
-class RedacteurInterface extends StatefulWidget {
-  @override
-  _RedacteurInterfaceState createState() => _RedacteurInterfaceState();
-}
-
-class _RedacteurInterfaceState extends State<RedacteurInterface> {
-  final DatabaseManager _databaseManager = DatabaseManager();
-  List<Redacteur> _redacteurs = [];
-
-  // Contrôleurs pour les champs de texte
-  final TextEditingController _nomController = TextEditingController();
-  final TextEditingController _prenomController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _chargerRedacteurs();
-  }
-
-  // Charger la liste des rédacteurs depuis la base de données
-  Future<void> _chargerRedacteurs() async {
-    final redacteurs = await _databaseManager.getAllRedacteurs();
-    setState(() {
-      _redacteurs = redacteurs;
-    });
-  }
-
-  // Ajouter un rédacteur
-  Future<void> _ajouterRedacteur() async {
-    if (_nomController.text.isEmpty || 
-        _prenomController.text.isEmpty || 
-        _emailController.text.isEmpty) {
-      _afficherMessage('Veuillez remplir tous les champs');
-      return;
-    }
-
-    final redacteur = Redacteur.sansId(
-      nom: _nomController.text,
-      prenom: _prenomController.text,
-      email: _emailController.text,
-    );
-
-    await _databaseManager.insertRedacteur(redacteur);
-    _viderChamps();
-    _chargerRedacteurs();
-    _afficherMessage('Rédacteur ajouté avec succès');
-  }
-
-  // Modifier un rédacteur
-  Future<void> _modifierRedacteur(Redacteur redacteur) async {
-    final nomController = TextEditingController(text: redacteur.nom);
-    final prenomController = TextEditingController(text: redacteur.prenom);
-    final emailController = TextEditingController(text: redacteur.email);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Modifier le Rédacteur'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nomController,
-              decoration: InputDecoration(labelText: 'Nom'),
-            ),
-            TextField(
-              controller: prenomController,
-              decoration: InputDecoration(labelText: 'Prénom'),
-            ),
-            TextField(
-              controller: emailController,
-              decoration: InputDecoration(labelText: 'Email'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              redacteur.nom = nomController.text;
-              redacteur.prenom = prenomController.text;
-              redacteur.email = emailController.text;
-              
-              await _databaseManager.updateRedacteur(redacteur);
-              Navigator.pop(context);
-              _chargerRedacteurs();
-              _afficherMessage('Rédacteur modifié avec succès');
-            },
-            child: Text('Modifier'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Supprimer un rédacteur
-  Future<void> _supprimerRedacteur(Redacteur redacteur) async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Confirmer la suppression'),
-        content: Text('Êtes-vous sûr de vouloir supprimer ${redacteur.prenom} ${redacteur.nom} ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await _databaseManager.deleteRedacteur(redacteur.id!);
-              Navigator.pop(context);
-              _chargerRedacteurs();
-              _afficherMessage('Rédacteur supprimé avec succès');
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Supprimer'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Vider les champs de saisie
-  void _viderChamps() {
-    _nomController.clear();
-    _prenomController.clear();
-    _emailController.clear();
-  }
-
-  // Afficher un message
-  void _afficherMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
+class PageAccueil extends StatelessWidget {
+  const PageAccueil({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        title: const Text("Gestion des rédacteurs"),
         backgroundColor: Colors.pink,
-
-        leading: IconButton(
-          icon: Icon(Icons.menu),
-          tooltip: 'Navigation menu',
-          onPressed: () {
-          },
-        ),
-
-        title: const Text('Gestion des rédacteurs'),
         centerTitle: true,
+      ),
+      body: const RedacteurInterface(),
+    );
+  }
+}
 
+class RedacteurInterface extends StatefulWidget {
+  const RedacteurInterface({super.key});
+
+  @override
+  State<RedacteurInterface> createState() => _RedacteurInterfaceState();
+}
+
+class _RedacteurInterfaceState extends State<RedacteurInterface> {
+  // Contrôleurs pour les champs de texte
+  final _nomController = TextEditingController();
+  final _prenomController = TextEditingController();
+  final _emailController = TextEditingController();
+
+  // Singleton de la base de données
+  final DatabaseManager _dbManager = DatabaseManager.instance;
+
+  // Liste des rédacteurs (Future)
+  late Future<List<Redacteur>> _redacteursFuture = Future.value([]);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRedacteurs();
+  }
+
+  // Charger les rédacteurs
+  void _loadRedacteurs() {
+    setState(() {
+      _redacteursFuture = _dbManager.getAllRedacteurs();
+    });
+  }
+
+  // Ajouter un rédacteur
+  Future<void> _ajouterRedacteur() async {
+    final nom = _nomController.text.trim();
+    final prenom = _prenomController.text.trim();
+    final email = _emailController.text.trim();
+
+    if (nom.isEmpty || prenom.isEmpty || email.isEmpty) return;
+
+    final nouveau = Redacteur.sansId(nom: nom, prenom: prenom, email: email);
+    await _dbManager.insertRedacteur(nouveau);
+
+    _nomController.clear();
+    _prenomController.clear();
+    _emailController.clear();
+
+    _loadRedacteurs();
+  }
+
+  // Supprimer un rédacteur avec confirmation
+  Future<void> _confirmerSuppression(Redacteur r) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmation'),
+        content: Text('Voulez-vous vraiment supprimer ${r.nom} ${r.prenom} ?'),
         actions: [
-          IconButton(
-            icon: Icon(Icons.search),
-            tooltip: 'Search',
-            onPressed: () {
-          
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Supprimer')),
+        ],
+      ),
+    );
+
+    if (confirm == true && r.id != null) {
+      await _dbManager.deleteRedacteur(r.id!);
+      _loadRedacteurs();
+    }
+  }
+
+  // Modifier un rédacteur via boîte de dialogue
+  Future<void> _modifierRedacteur(Redacteur r) async {
+    final nomController = TextEditingController(text: r.nom);
+    final prenomController = TextEditingController(text: r.prenom);
+    final emailController = TextEditingController(text: r.email);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modifier le rédacteur'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nomController, decoration: const InputDecoration(labelText: 'Nom')),
+            TextField(controller: prenomController, decoration: const InputDecoration(labelText: 'Prénom')),
+            TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () async {
+              final updated = Redacteur(
+                id: r.id,
+                nom: nomController.text.trim(),
+                prenom: prenomController.text.trim(),
+                email: emailController.text.trim(),
+              );
+              await _dbManager.updateRedacteur(updated);
+              Navigator.pop(context);
+              _loadRedacteurs();
             },
+            child: const Text('Valider'),
           ),
         ],
       ),
- 
+    );
+  }
 
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Formulaire d'ajout
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _nomController,
-                      decoration: InputDecoration(
-                        labelText: 'Nom',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    TextField(
-                      controller: _prenomController,
-                      decoration: InputDecoration(
-                        labelText: 'Prénom',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    TextField(
-                      controller: _emailController,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    SizedBox(height: 15),
-                    ElevatedButton.icon(
-                      onPressed: _ajouterRedacteur,
-                      icon: Icon(Icons.add),
-                      label: Text('Ajouter un Rédacteur'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          // Champs texte pour ajouter un rédacteur
+          TextField(
+            controller: _nomController,
+            decoration: const InputDecoration(labelText: 'Nom'),
+          ),
+          TextField(
+            controller: _prenomController,
+            decoration: const InputDecoration(labelText: 'Prénom'),
+          ),
+          TextField(
+            controller: _emailController,
+            decoration: const InputDecoration(labelText: 'Email'),
+          ),
+          const SizedBox(height: 10),
+          // Bouton Ajouter un rédacteur
+          ElevatedButton.icon(
+            onPressed: _ajouterRedacteur,
+            icon: const Icon(Icons.add),
+            label: const Text('Ajouter un Rédacteur'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.pink,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            SizedBox(height: 20),
-            
-            // Liste des rédacteurs
-            Expanded(
-              child: _redacteurs.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Aucun rédacteur enregistré',
-                        style: TextStyle(fontSize: 18, color: Colors.grey),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _redacteurs.length,
-                      itemBuilder: (context, index) {
-                        final redacteur = _redacteurs[index];
-                        return Card(
-                          margin: EdgeInsets.symmetric(vertical: 5),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Text(
-                                '${redacteur.prenom[0]}${redacteur.nom[0]}',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              backgroundColor: Colors.blue,
-                            ),
-                            title: Text('${redacteur.prenom} ${redacteur.nom}'),
-                            subtitle: Text(redacteur.email),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(Icons.edit, color: Colors.orange),
-                                  onPressed: () => _modifierRedacteur(redacteur),
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _supprimerRedacteur(redacteur),
-                                ),
-                              ],
-                            ),
+          ),
+          const SizedBox(height: 20),
+          // Liste des rédacteurs
+          Expanded(
+            child: FutureBuilder<List<Redacteur>>(
+              future: _redacteursFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(child: Text('Erreur : ${snapshot.error}'));
+                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text('Aucun rédacteur trouvé'));
+                }
+
+                final redacteurs = snapshot.data!;
+
+                return ListView.builder(
+                  itemCount: redacteurs.length,
+                  itemBuilder: (context, index) {
+                    final r = redacteurs[index];
+                    return ListTile(
+                      title: Text('${r.nom} ${r.prenom}'),
+                      subtitle: Text(r.email),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => _modifierRedacteur(r),
                           ),
-                        );
-                      },
-                    ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _confirmerSuppression(r),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -292,6 +231,8 @@ class _RedacteurInterfaceState extends State<RedacteurInterface> {
     _nomController.dispose();
     _prenomController.dispose();
     _emailController.dispose();
+    _dbManager.close(); // optionnel
     super.dispose();
   }
 }
+

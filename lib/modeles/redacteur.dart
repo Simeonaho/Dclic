@@ -1,15 +1,15 @@
-import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
-
+/// ---------------------
+/// Modèle Redacteur
+/// ---------------------
 class Redacteur {
-  int? id;
-  String nom;
-  String prenom;
-  String email;
+  final int? id;
+  final String nom;
+  final String prenom;
+  final String email;
 
-  // Constructeur avec tous les attributs
   Redacteur({
     this.id,
     required this.nom,
@@ -17,24 +17,25 @@ class Redacteur {
     required this.email,
   });
 
-  // Constructeur sans l'attribut id (pour l'insertion)
+  // Constructeur secondaire (sans id)
   Redacteur.sansId({
     required this.nom,
     required this.prenom,
     required this.email,
-  });
+  }) : id = null;
 
-  // Méthode pour convertir un objet Rédacteur en Map
+  // Conversion en Map (utile pour sqflite)
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
+    final map = <String, dynamic>{
       'nom': nom,
       'prenom': prenom,
       'email': email,
     };
+    if (id != null) map['id'] = id;
+    return map;
   }
 
-  // Méthode pour créer un Rédacteur à partir d'un Map
+  // Créer un objet depuis une Map
   factory Redacteur.fromMap(Map<String, dynamic> map) {
     return Redacteur(
       id: map['id'],
@@ -50,76 +51,85 @@ class Redacteur {
   }
 }
 
-
+/// ---------------------
+/// DatabaseManager 
+/// ---------------------
 class DatabaseManager {
-  static Database? _database;
-  static const String _tableName = 'redacteurs';
-
-  // Singleton pattern pour avoir une seule instance
-  static final DatabaseManager _instance = DatabaseManager._internal();
-  factory DatabaseManager() => _instance;
+  static final DatabaseManager instance = DatabaseManager._internal();
   DatabaseManager._internal();
 
-  // Getter pour la base de données
+  static Database? _database;
+
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
+    _database = await _initDB("redacteurs_database.db");
     return _database!;
   }
 
-  // Initialisation de la base de données
-  Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'redacteurs.db');
+  // Initialisation de la DB
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+
     return await openDatabase(
       path,
       version: 1,
-      onCreate: _onCreate,
+      onCreate: _createDB,
     );
   }
 
   // Création de la table
-  Future<void> _onCreate(Database db, int version) async {
+  Future _createDB(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE $_tableName(
+      CREATE TABLE redacteurs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nom TEXT NOT NULL,
-        prenom TEXT NOT NULL,
-        email TEXT NOT NULL
+        nom TEXT,
+        prenom TEXT,
+        email TEXT
       )
     ''');
   }
 
-  // Récupérer tous les rédacteurs
+  /// ---------------------
+  /// CRUD
+  /// ---------------------
+
   Future<List<Redacteur>> getAllRedacteurs() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(_tableName);
-    return List.generate(maps.length, (i) => Redacteur.fromMap(maps[i]));
+    final List<Map<String, dynamic>> maps = await db.query('redacteurs');
+    return maps.map((map) => Redacteur.fromMap(map)).toList();
   }
 
-  // Insérer un rédacteur
   Future<int> insertRedacteur(Redacteur redacteur) async {
     final db = await database;
-    return await db.insert(_tableName, redacteur.toMap());
+    return await db.insert(
+      'redacteurs',
+      redacteur.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
-  // Mettre à jour un rédacteur
   Future<int> updateRedacteur(Redacteur redacteur) async {
     final db = await database;
     return await db.update(
-      _tableName,
+      'redacteurs',
       redacteur.toMap(),
       where: 'id = ?',
       whereArgs: [redacteur.id],
     );
   }
 
-  // Supprimer un rédacteur
   Future<int> deleteRedacteur(int id) async {
     final db = await database;
     return await db.delete(
-      _tableName,
+      'redacteurs',
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  Future close() async {
+    final db = await database;
+    db.close();
   }
 }
